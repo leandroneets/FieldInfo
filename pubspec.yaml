@@ -1,0 +1,36 @@
+name: fieldinfo
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.7.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # Supabase / config
+  supabase_flutter: ^2.6.0
+  flutter_dotenv: ^5.2.1
+
+  # State management
+  provider: ^6.0.5
+
+  # Offline/unlock helpers
+  flutter_secure_storage: ^9.2.2
+  connectivity_plus: ^6.0.5
+  crypto: ^3.0.3
+  # local_auth: ^2.3.0   # <- optional, only if you’ll add biometrics
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/.env

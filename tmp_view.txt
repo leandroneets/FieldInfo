@@ -1,0 +1,106 @@
+﻿import 'package:flutter/material.dart';
+
+class HomeTecnicoPage extends StatefulWidget {
+  const HomeTecnicoPage({super.key});
+
+  @override
+  State<HomeTecnicoPage> createState() => _HomeTecnicoPageState();
+}
+
+class _HomeTecnicoPageState extends State<HomeTecnicoPage>
+    with SingleTickerProviderStateMixin {
+  bool isMenuOpen = false;
+  late AnimationController _animationController;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  void toggleMenu() {
+    setState(() {
+      isMenuOpen = !isMenuOpen;
+      isMenuOpen ? _animationController.forward() : _animationController.reverse();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(title: const Text('FieldInfo - TÃ©cnico')),
+      body: Stack(
+        children: [
+          const Center(child: Text('Bem-vindo!')),
+
+          if (isMenuOpen)
+            Positioned(
+              bottom: 100,
+              left: 20,
+              child: Container(
+                width: 260,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 10,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    menuOption('Campos', Icons.map_outlined),
+                    menuOption('Semeadura', Icons.agriculture),
+                    menuOption('CheckList BioEnsaio', Icons.checklist),
+                    menuOption('Bioensaio', Icons.science_outlined),
+                    menuOption('EstÃ¡dio FenolÃ³gico', Icons.eco_outlined),
+                    menuOption('Colheita', Icons.grass),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+floatingActionButtonLocation: FloatingActionButtonLocation.startFloat, // ðŸ‘ˆ move pro canto inferior ESQUERDO
+floatingActionButton: FloatingActionButton(
+  onPressed: toggleMenu,
+  backgroundColor: Colors.blue,
+  child: AnimatedIcon(
+    icon: AnimatedIcons.menu_close,
+    progress: _animationController,
+    size: 30,
+  ),
+),
+    );
+  }
+
+  Widget menuOption(String title, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.blue),
+          const SizedBox(width: 10),
+          Text(title, style: const TextStyle(fontSize: 16)),
+        ],
+      ),
+    );
+  }
+}
+
