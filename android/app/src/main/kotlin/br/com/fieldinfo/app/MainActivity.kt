@@ -1,4 +1,4 @@
-package com.example.fieldinfo
+package br.com.fieldinfo.app
 
 import io.flutter.embedding.android.FlutterActivity
 

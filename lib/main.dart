@@ -6,11 +6,15 @@ import 'screens/role_router.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: 'assets/.env');
-  // Initialize Supabase with the URL and anon key from the .env file
 
+  // `anonKey` is the SDK's parameter name and cannot be changed, but the value
+  // we pass is the newer publishable key (`sb_publishable_...`). Supabase
+  // retired the legacy `anon` key; the publishable key is its drop-in
+  // equivalent and carries the same low privileges, so RLS still governs
+  // access. See assets/.env.example.
   await Supabase.initialize(
     url: dotenv.env['SUPABASE_URL']!,
-    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
+    anonKey: dotenv.env['SUPABASE_PUBLISHABLE_KEY']!,
   );
 
   runApp(const FieldInfoApp());

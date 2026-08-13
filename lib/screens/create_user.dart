@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// User-creation UI, kept as the layout reference for Phase 5.
+///
+/// The original version called `auth.admin.createUser` from the app, which
+/// required the `service_role` key to ship inside the APK and bypassed RLS
+/// entirely (docs/ASSESSMENT.md). That call is gone, along with the `usuarios`
+/// insert that followed it — without the auth call it only produced rows with
+/// no matching `auth.users` identity. Creation moves to a role-checked Supabase
+/// Edge Function in Phase 5; until then this form is deliberately inert.
 class CreateUserPage extends StatefulWidget {
   const CreateUserPage({super.key});
 
@@ -14,52 +21,15 @@ class _CreateUserPageState extends State<CreateUserPage> {
   final _nomeController = TextEditingController();
 
   String? _tipoUsuario = 'Tecnico';
-  bool _loading = false;
 
   final List<String> _tipos = ['Tecnico', 'Supervisor', 'Suporte'];
 
-  Future<void> _createUser() async {
-    setState(() => _loading = true);
-    final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
-    final nome = _nomeController.text.trim();
-
-    try {
-      // Step 1: Create user in Supabase Auth
-      final authResponse = await Supabase.instance.client.auth.admin.createUser(
-        AdminUserAttributes(
-          email: email,
-          password: password,
-          emailConfirm: true,
-        ),
-      );
-
-      if (authResponse.user == null) {
-        throw Exception("Failed to create auth user");
-      }
-
-      // Step 2: Insert into your 'usuarios' table
-      await Supabase.instance.client.from('usuarios').insert({
-        'email': email,
-        'nome': nome,
-        'tipo_usuario': _tipoUsuario,
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Usuário criado com sucesso!')),
-      );
-
-      _emailController.clear();
-      _passwordController.clear();
-      _nomeController.clear();
-      setState(() => _tipoUsuario = 'Tecnico');
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro: $e')),
-      );
-    } finally {
-      setState(() => _loading = false);
-    }
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    _nomeController.dispose();
+    super.dispose();
   }
 
   @override
@@ -70,6 +40,16 @@ class _CreateUserPageState extends State<CreateUserPage> {
         padding: const EdgeInsets.all(16.0),
         child: ListView(
           children: [
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(12),
+                child: Text(
+                  'A criação de usuários passará a ser feita pelo servidor. '
+                  'Indisponível nesta versão.',
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
             TextField(
               controller: _nomeController,
               decoration: const InputDecoration(labelText: 'Nome'),
@@ -98,11 +78,9 @@ class _CreateUserPageState extends State<CreateUserPage> {
               decoration: const InputDecoration(labelText: 'Tipo de Usuário'),
             ),
             const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _loading ? null : _createUser,
-              child: _loading
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text('Criar Usuário'),
+            const ElevatedButton(
+              onPressed: null, // enabled in Phase 5, via the Edge Function
+              child: Text('Criar Usuário'),
             ),
           ],
         ),
