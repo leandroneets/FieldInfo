@@ -23,9 +23,12 @@ class _RoleRouterState extends State<RoleRouter> {
   }
 
   Future<void> _fetchUserRole() async {
-    final email = Supabase.instance.client.auth.currentUser?.email;
+    // Matched on auth.uid(), not email. usuario.id IS auth.users.id (ADR-008),
+    // so identity never depends on a mutable column. The prototype looked this
+    // up by email, which is exactly why its RLS policies could not be written.
+    final userId = Supabase.instance.client.auth.currentUser?.id;
 
-    if (email == null) {
+    if (userId == null) {
       setState(() {
         _tipoUsuario = null;
         _loading = false;
@@ -35,13 +38,13 @@ class _RoleRouterState extends State<RoleRouter> {
 
     try {
       final data = await Supabase.instance.client
-          .from('usuarios')
-          .select('tipo_usuario')
-          .eq('email', email)
+          .from('usuario')
+          .select('papel')
+          .eq('id', userId)
           .maybeSingle();
 
       setState(() {
-        _tipoUsuario = data?['tipo_usuario'];
+        _tipoUsuario = data?['papel'];
         _loading = false;
       });
     } catch (e) {
@@ -60,12 +63,13 @@ class _RoleRouterState extends State<RoleRouter> {
       );
     }
 
-    // Redireciona conforme o papel
-    if (_tipoUsuario == 'Tecnico') {
-      return const HomeTecnicoPage();      // <- nome novo da sua tela do técnico
-    } else if (_tipoUsuario == 'Supervisor') {
+    // Redireciona conforme o papel. Os valores são identificadores em minúsculas
+    // sem acento, definidos pelo CHECK em usuario.papel — nunca rótulos de tela.
+    if (_tipoUsuario == 'tecnico') {
+      return const HomeTecnicoPage();
+    } else if (_tipoUsuario == 'supervisor') {
       return const HomeSupervisor();
-    } else if (_tipoUsuario == 'Suporte') {
+    } else if (_tipoUsuario == 'suporte') {
       return const HomeSuporte();
     }
 
@@ -76,7 +80,7 @@ class _RoleRouterState extends State<RoleRouter> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Usuário sem papel definido em "usuarios".'),
+            const Text('Usuário sem papel definido em "usuario".'),
             const SizedBox(height: 12),
             ElevatedButton(
               onPressed: () async {

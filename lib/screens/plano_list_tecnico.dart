@@ -20,25 +20,30 @@ class _PlanoListTecnicoState extends State<PlanoListTecnico> {
 
   Future<void> _fetchPlanos() async {
     final supabase = Supabase.instance.client;
-    final email = supabase.auth.currentUser?.email;
 
+    // No assignment filter here on purpose. The RLS policy `plano_select`
+    // already restricts a técnico to his assigned fields, so filtering again in
+    // the client would duplicate the rule in a second place where it could
+    // drift. Authorization lives in Postgres (CLAUDE.md hard rule 4); this
+    // query just asks for what the caller is allowed to see.
+    //
+    // fazenda and gleba are now separate tables, so they are embedded rather
+    // than read as text columns off the plan row.
     final response = await supabase
         .from('plano_producao')
         .select('''
-          id_plano,
+          id,
           num_campo,
-          fazenda,
-          gleba,
           setor,
+          hectare,
           modo_colheita,
-          usuario_plano!inner(
-            id_usuario,
-            usuarios (
-              email
-            )
+          gleba (
+            nome,
+            fazenda ( nome )
           )
         ''')
-        .eq('usuario_plano.usuarios.email', email ?? '');
+        .isFilter('deleted_at', null)
+        .order('num_campo');
 
     setState(() {
       planos = response;
@@ -66,12 +71,17 @@ class _PlanoListTecnicoState extends State<PlanoListTecnico> {
         itemCount: planos.length,
         itemBuilder: (context, index) {
           final plano = planos[index];
+          final gleba = plano['gleba'] as Map<String, dynamic>?;
+          final fazenda = gleba?['fazenda'] as Map<String, dynamic>?;
+
           return Card(
             margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             child: ListTile(
-              title: Text('Campo ${plano['num_campo']} - ${plano['fazenda'] ?? 'Fazenda não informada'}'),
+              title: Text(
+                  'Campo ${plano['num_campo']} - ${fazenda?['nome'] ?? 'Fazenda não informada'}'),
               subtitle: Text(
-                  'Gleba: ${plano['gleba'] ?? '-'} | Setor: ${plano['setor'] ?? '-'}\nModo de Colheita: ${plano['modo_colheita'] ?? '-'}'),
+                  'Gleba: ${gleba?['nome'] ?? '-'} | Setor: ${plano['setor'] ?? '-'}\n'
+                  'Modo de Colheita: ${plano['modo_colheita'] ?? '-'}'),
             ),
           );
         },

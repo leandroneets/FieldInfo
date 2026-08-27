@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'semeadura_form_tecnico.dart';
+import 'plano_list_tecnico.dart';
 
 
 /// --- Screen palette overrides ---
@@ -140,7 +141,12 @@ class _HomeTecnicoPageState extends State<HomeTecnicoPage>
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children:  [
-                            _MenuItem(icon: Icons.map_outlined,     text: 'Campos'),
+                            _MenuItem(icon: Icons.map_outlined,     text: 'Campos', onTap: () {
+                              _closeMenu();
+                              Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const PlanoListTecnico()),
+                              );
+                            },),
                             Divider(height: 6),
                             _MenuItem(icon: Icons.agriculture,      text: 'Semeadura', onTap: () {
                               Navigator.of(context).push(
