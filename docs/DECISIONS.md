@@ -204,3 +204,45 @@ migration only revoked reachability, which is the reversible half.
 
 **Consequence:** the prototype's técnico screens return zero rows until Phase 2. Accepted —
 those screens are UI reference being rebuilt, not production functionality.
+
+---
+
+## ADR-014 — Domain vocabulary is admin-managed data, not CHECK constraints
+
+**Status:** Accepted
+
+Value lists the business owns — planting status, phenological stage, spacing type, harvest
+mode — live in a `parametro` table scoped per tenant, rather than in CHECK constraints.
+
+Two reasons. `docs/DOMAIN.md` requires every reference dropdown to work with zero connectivity,
+status values explicitly included; a CHECK constraint cannot populate a dropdown, so the list
+would have to be duplicated in Dart and the two copies would drift. And adding a phenological
+stage should not require a migration and a deploy.
+
+Integrity is not traded away for this. Consuming columns carry a generated constant column
+naming their domain plus a composite foreign key into `parametro(org_id, dominio, codigo)`, so
+Postgres rejects a value absent from the right domain and the right tenant. Verified: an
+invented `modo_colheita` of 'Silagem' is refused by the database, and a NULL is still accepted
+because the composite FK uses MATCH SIMPLE.
+
+**Where the line falls:** domain vocabulary goes in the table; anything RLS reads stays in the
+schema. `usuario.papel` is deliberately excluded — if suporte can insert `parametro` rows and
+roles were `parametro` rows, suporte could mint itself a new role. Privilege escalation by data
+entry.
+
+**Supporting rules:**
+
+- `codigo` is the stored value that foreign keys reference and history is written in; it is
+  never renamed. `rotulo` is the display label and can be corrected freely because nothing
+  references it. This makes admin-defined vocabulary a deliberate exception to the CLAUDE.md
+  rule that user-facing strings live in ARB files — ARB is compiled into the app, and these
+  strings are tenant data.
+- Behaviour is never inferred from a name. The ADR-006 edit lock keys off an explicit
+  `bloqueia_edicao` flag, never off a status happening to be called 'Concluída'; otherwise
+  renaming a status would silently disable the lock.
+- Values are retired via `ativo`, never deleted. Combined with ON DELETE RESTRICT, a value in
+  use cannot be destroyed, so historical records keep resolving (ADR-005).
+
+**Accepted cost:** `parametro` rows are tenant data, so migrations cannot seed them. Onboarding
+a new organizacao must copy the default vocabulary — work that belongs to the Phase 5 org
+creation Edge Function. Until then only the bootstrap org has a usable set.
