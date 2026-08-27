@@ -2,7 +2,7 @@
 
 Progress marker — update as phases complete.
 
-**Current phase: 0**
+**Current phase: 3**
 
 ---
 
@@ -29,7 +29,7 @@ Progress marker — update as phases complete.
       returning any technician's `semeadura` rows to anyone holding the publishable key.
       Verified after push: 6/6 tables RLS-on with 0 policies, function reachable only by
       `postgres` and `service_role`.
-- [~] Delete `usuarios.senha` column — migration `20260809055618_drop_usuarios_senha.sql`
+- [x] Delete `usuarios.senha` column — migration `20260809055618_drop_usuarios_senha.sql`
       written and verified null in all rows; awaiting `supabase db push`
 - [x] Delete `tmp_view.txt`
 - [x] Set a real `applicationId` — `br.com.fieldinfo.app`, in both `applicationId` and
@@ -51,16 +51,22 @@ Progress marker — update as phases complete.
 
 **Objective:** The complete Postgres schema, designed for offline sync and multi-tenancy.
 
-- [ ] Entities, keys, FKs, constraints, status enums as CHECK constraints
-- [ ] Standard sync columns on every table (see CLAUDE.md)
-- [ ] `organizacao` as tenant root
-- [ ] `revision` / `updated_at` triggers
-- [ ] Audit table and triggers
-- [ ] Unique constraints, including the one missing from `usuario_plano`
-- [ ] Migration files, applied via CLI
+- [x] Entities, keys, FKs, constraints — migrations `phase1a` … `phase1d`. Status enums are
+      **not** CHECK constraints: superseded by ADR-014, which puts admin-managed vocabulary in
+      `parametro` with a composite FK. `usuario.papel` stays a CHECK, deliberately.
+- [x] Standard sync columns on every table (see CLAUDE.md)
+- [x] `organizacao` as tenant root
+- [x] `revision` / `updated_at` triggers — `set_row_metadata()`
+- [ ] **Audit table and triggers — still outstanding.** Nothing records who changed what beyond
+      `updated_by` / `revision` on the row itself. Needed before the field pilot.
+- [x] Unique constraints — including `usuario_plano(id_usuario, id_plano)` and
+      `semeadura(id_plano)`, which enforces one planting record per field
+- [x] Migration files, applied via CLI
 
-**Output:** `supabase/migrations/`, and an ER diagram in `docs/SCHEMA.md`.
-**Validation:** migrations apply to an empty database from scratch, twice, cleanly.
+**Output:** `supabase/migrations/`, and an ER diagram in `docs/SCHEMA.md` *(diagram not written)*.
+**Validation:** migrations apply to an empty database from scratch, twice, cleanly —
+**not yet satisfiable.** `20260809052924` references tables it does not create (ADR-012).
+Resolving this means a squashed baseline migration; it has not been done.
 **Dependencies:** Phase 0.
 
 ---
@@ -69,14 +75,20 @@ Progress marker — update as phases complete.
 
 **Objective:** Authorization enforced in Postgres.
 
-- [ ] Security-definer helpers: `current_org_id()`, `current_role()`
-- [ ] Per-table, per-role, per-operation policies
-- [ ] Technicians can read only their assigned fields, and write only their own activity records
-- [ ] Master data read-only for técnicos, writable by suporte
-- [ ] pgTAP or SQL test script asserting cross-tenant reads return zero rows
+- [x] Security-definer helpers — `current_org_id()`, `current_papel()` (named for the domain,
+      not `current_role()`, which collides with a Postgres built-in), plus `is_admin()`,
+      `is_suporte()`, `tem_atribuicao()`, `pode_ver_plano()`, `semeadura_bloqueada()`.
+      All revoked from PUBLIC and granted only to `authenticated`.
+- [x] Per-table, per-role, per-operation policies — `phase2` and `phase2b`
+- [x] Technicians read only their assigned fields, and write only their own activity records.
+      Class A tables are append-only for técnicos: INSERT yes, UPDATE admin-only.
+- [x] Master data read-only for técnicos, writable by suporte
+- [x] SQL test script — `supabase/tests/rls_test.sql`, 13 assertions in a rolled-back
+      transaction, including the ADR-006 edit lock and the moisture-average correctness check
 
 **Output:** policy migrations + a test script.
-**Validation:** authenticate as a técnico of org A and attempt to read org B — must return nothing.
+**Validation:** authenticate as a técnico of org A and attempt to read org B — must return
+nothing. **Passing:** the script fabricates a second tenant and asserts 0 rows visible.
 **Dependencies:** Phase 1.
 
 ---

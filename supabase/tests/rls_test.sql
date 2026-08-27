@@ -149,6 +149,59 @@ where id = '77777777-7777-4777-8777-777777777777' and observacao = 'nao deveria 
 select set_config('role', 'postgres', true);
 
 -- ---------------------------------------------------------------------------
+-- 6. Class A append-only: a técnico may record an observation but not rewrite
+--    one. Silently editable measurements defeat the point of an audit trail.
+-- ---------------------------------------------------------------------------
+
+select set_config('role', 'authenticated', true),
+       set_config('request.jwt.claims', json_build_object('sub', :'tec_a')::text, true);
+
+insert into public.estadio_fenologico
+  (id, org_id, id_semeadura, estadio, data_apontamento, observacao, created_by)
+values ('66666666-6666-4666-8666-666666666666',
+        '00000000-0000-4000-8000-000000000001',
+        '77777777-7777-4777-8777-777777777777',
+        'V3', current_date, 'original', :'tec_a');
+
+select count(*) as n from public.estadio_fenologico
+where id = '66666666-6666-4666-8666-666666666666' \gset estIns_
+
+update public.estadio_fenologico set observacao = 'reescrito'
+where id = '66666666-6666-4666-8666-666666666666';
+
+select count(*) as n from public.estadio_fenologico
+where id = '66666666-6666-4666-8666-666666666666' and observacao = 'reescrito' \gset estUpd_
+
+-- ---------------------------------------------------------------------------
+-- 7. The moisture fix: the average must come from the readings that exist.
+--
+--    Three readings of 10, 12 and 14 average to 12.00. The legacy expression
+--    divided by a hard-coded 32.0 and would have produced 1.13 — which is what
+--    every sample of fewer than 32 readings was silently recording.
+-- ---------------------------------------------------------------------------
+
+insert into public.amostra_umidade (id, org_id, id_plano, data_amostra, created_by)
+values ('55550000-5555-4555-8555-555500000001',
+        '00000000-0000-4000-8000-000000000001',
+        'eeeeeeee-0000-4000-8000-000000000001', current_date, :'tec_a');
+
+insert into public.amostra_umidade_leitura (id, org_id, id_amostra, sequencia, valor, created_by)
+values (gen_random_uuid(), '00000000-0000-4000-8000-000000000001', '55550000-5555-4555-8555-555500000001', 1, 10.00, :'tec_a'),
+       (gen_random_uuid(), '00000000-0000-4000-8000-000000000001', '55550000-5555-4555-8555-555500000001', 2, 12.00, :'tec_a'),
+       (gen_random_uuid(), '00000000-0000-4000-8000-000000000001', '55550000-5555-4555-8555-555500000001', 3, 14.00, :'tec_a');
+
+select leituras as n from public.vw_amostra_umidade_resumo
+where id_amostra = '55550000-5555-4555-8555-555500000001' \gset umidN_
+
+select media as n from public.vw_amostra_umidade_resumo
+where id_amostra = '55550000-5555-4555-8555-555500000001' \gset umidMedia_
+
+select desvio_padrao as n from public.vw_amostra_umidade_resumo
+where id_amostra = '55550000-5555-4555-8555-555500000001' \gset umidSd_
+
+select set_config('role', 'postgres', true);
+
+-- ---------------------------------------------------------------------------
 -- Assertions.
 -- ---------------------------------------------------------------------------
 
@@ -159,6 +212,11 @@ select pg_temp.assert(:tecBu_n  = 1, 'tecnico B must see only his own org usuari
 select pg_temp.assert(:tecBm_n  = 0, 'CROSS-TENANT LEAK: tecnico B saw org A materials');
 select pg_temp.assert(:edit_n   = 1, 'assigned tecnico must be able to edit an unlocked semeadura');
 select pg_temp.assert(:locked_n = 0, 'EDIT LOCK BROKEN: tecnico edited a Finalizado semeadura');
+select pg_temp.assert(:estIns_n  = 1, 'tecnico must be able to record a phenological observation');
+select pg_temp.assert(:estUpd_n  = 0, 'APPEND-ONLY BROKEN: tecnico rewrote an existing observation');
+select pg_temp.assert(:umidN_n   = 3, 'moisture sample must report 3 readings');
+select pg_temp.assert(:umidMedia_n = 12.00, 'moisture average must be 12.00 over 3 readings, not divided by a fixed 32');
+select pg_temp.assert(:umidSd_n  = 2.00, 'moisture standard deviation must be 2.00 (n-1 over the real readings)');
 
 do $$ begin raise notice 'ALL RLS ASSERTIONS PASSED'; end $$;
 
