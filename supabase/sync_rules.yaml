@@ -4,18 +4,27 @@
 # lives in version control next to the RLS policies it mirrors.
 #
 # ---------------------------------------------------------------------------
-# THESE RULES ARE NOT AUTHORIZATION
+# ⚠ THESE RULES *ARE* THE AUTHORIZATION FOR EVERYTHING THAT SYNCS DOWN
 #
-# Sync Rules decide what is *delivered*; RLS decides what may be *read and
-# written*. They are enforced in different places and must agree, but if they
-# ever disagree, RLS is the one that protects the data — a client cannot obtain
-# more than its policies allow, whatever a bucket says.
+# PowerSync replicates through a role holding BYPASSRLS — it must, since it
+# reads the WAL for every tenant and decides delivery itself. Row-level security
+# therefore does NOT filter replication.
 #
-# The pairing is deliberate: every rule below has a counterpart in
-# 20260827021042_phase2_rls_policies.sql expressed the same way, against the
-# same columns. That is why id_plano was denormalised onto the activity tables
-# in 20260827024517 — so both layers can say "this field is assigned to you"
-# using the identical predicate.
+# So for data flowing down to a device, the buckets below are the only boundary.
+# A mistake here is a cross-tenant leak, and no policy will catch it. Treat this
+# file with the same care as a policy migration.
+#
+# RLS still governs the other direction: uploads travel back through PostgREST
+# as the authenticated user, and direct API reads are policy-checked as normal.
+# Both layers matter; they guard opposite directions.
+#
+# Every rule below is written to mirror its counterpart in
+# 20260827021042_phase2_rls_policies.sql — same predicate, same column — so the
+# two can be compared by eye.
+#
+# That is why id_plano was denormalised onto the activity tables in
+# 20260827024517 — so both layers can say "this field is assigned to you" using
+# the identical predicate rather than two expressions that drift apart.
 #
 # ---------------------------------------------------------------------------
 # BUCKET SHAPE
