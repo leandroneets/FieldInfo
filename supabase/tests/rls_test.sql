@@ -157,10 +157,11 @@ select set_config('role', 'authenticated', true),
        set_config('request.jwt.claims', json_build_object('sub', :'tec_a')::text, true);
 
 insert into public.estadio_fenologico
-  (id, org_id, id_semeadura, estadio, data_apontamento, observacao, created_by)
+  (id, org_id, id_semeadura, id_plano, estadio, data_apontamento, observacao, created_by)
 values ('66666666-6666-4666-8666-666666666666',
         '00000000-0000-4000-8000-000000000001',
         '77777777-7777-4777-8777-777777777777',
+        'eeeeeeee-0000-4000-8000-000000000001',
         'V3', current_date, 'original', :'tec_a');
 
 select count(*) as n from public.estadio_fenologico
@@ -185,10 +186,38 @@ values ('55550000-5555-4555-8555-555500000001',
         '00000000-0000-4000-8000-000000000001',
         'eeeeeeee-0000-4000-8000-000000000001', current_date, :'tec_a');
 
-insert into public.amostra_umidade_leitura (id, org_id, id_amostra, sequencia, valor, created_by)
-values (gen_random_uuid(), '00000000-0000-4000-8000-000000000001', '55550000-5555-4555-8555-555500000001', 1, 10.00, :'tec_a'),
-       (gen_random_uuid(), '00000000-0000-4000-8000-000000000001', '55550000-5555-4555-8555-555500000001', 2, 12.00, :'tec_a'),
-       (gen_random_uuid(), '00000000-0000-4000-8000-000000000001', '55550000-5555-4555-8555-555500000001', 3, 14.00, :'tec_a');
+insert into public.amostra_umidade_leitura (id, org_id, id_amostra, id_plano, sequencia, valor, created_by)
+values (gen_random_uuid(), '00000000-0000-4000-8000-000000000001', '55550000-5555-4555-8555-555500000001', 'eeeeeeee-0000-4000-8000-000000000001', 1, 10.00, :'tec_a'),
+       (gen_random_uuid(), '00000000-0000-4000-8000-000000000001', '55550000-5555-4555-8555-555500000001', 'eeeeeeee-0000-4000-8000-000000000001', 2, 12.00, :'tec_a'),
+       (gen_random_uuid(), '00000000-0000-4000-8000-000000000001', '55550000-5555-4555-8555-555500000001', 'eeeeeeee-0000-4000-8000-000000000001', 3, 14.00, :'tec_a');
+
+-- -----------------------------------------------------------------------
+-- 7b. The denormalised bucket key cannot drift from its parent.
+--
+-- id_plano is copied onto the child so PowerSync can bucket it, but the
+-- composite FK into semeadura(id, id_plano) means a child claiming a
+-- different field than its parent is rejected outright. This is the
+-- guarantee the legacy model lacked when it carried both id_plano and
+-- NumCampo with independent foreign keys.
+-- -----------------------------------------------------------------------
+
+do $$
+begin
+  begin
+    insert into public.estadio_fenologico
+      (id, org_id, id_semeadura, id_plano, estadio, data_apontamento, created_by)
+    values (gen_random_uuid(),
+            '00000000-0000-4000-8000-000000000001',
+            '77777777-7777-4777-8777-777777777777',           -- semeadura on field 101
+            'eeeeeeee-0000-4000-8000-000000000002',           -- but claiming field 102
+            'V4', current_date,
+            (select (current_setting('request.jwt.claims')::json ->> 'sub')::uuid));
+    raise exception 'ASSERTION FAILED: child row kept an id_plano that disagrees with its parent';
+  exception
+    when foreign_key_violation then null;  -- expected
+    when insufficient_privilege then null; -- also acceptable: RLS refused first
+  end;
+end $$;
 
 select leituras as n from public.vw_amostra_umidade_resumo
 where id_amostra = '55550000-5555-4555-8555-555500000001' \gset umidN_

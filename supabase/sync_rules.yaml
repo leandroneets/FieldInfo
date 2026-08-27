@@ -1,0 +1,119 @@
+# PowerSync Sync Rules — what reaches each device.
+#
+# Paste into the PowerSync dashboard for the instance; kept here so the rule
+# lives in version control next to the RLS policies it mirrors.
+#
+# ---------------------------------------------------------------------------
+# THESE RULES ARE NOT AUTHORIZATION
+#
+# Sync Rules decide what is *delivered*; RLS decides what may be *read and
+# written*. They are enforced in different places and must agree, but if they
+# ever disagree, RLS is the one that protects the data — a client cannot obtain
+# more than its policies allow, whatever a bucket says.
+#
+# The pairing is deliberate: every rule below has a counterpart in
+# 20260827021042_phase2_rls_policies.sql expressed the same way, against the
+# same columns. That is why id_plano was denormalised onto the activity tables
+# in 20260827024517 — so both layers can say "this field is assigned to you"
+# using the identical predicate.
+#
+# ---------------------------------------------------------------------------
+# BUCKET SHAPE
+#
+# Three definitions:
+#
+#   org_master        reference data, keyed on the caller's organizacao
+#   campos_tecnico    one bucket per assigned field, for técnicos
+#   org_completo      the whole tenant, for supervisor and suporte only
+#
+# A técnico matches org_master and campos_tecnico. An admin matches org_master
+# and org_completo, and org_completo's parameter query returns nothing for a
+# técnico, so he can never fall into it.
+#
+# Per-field buckets matter operationally: when an assignment is revoked,
+# PowerSync removes exactly that bucket from the device rather than resyncing
+# everything.
+# ---------------------------------------------------------------------------
+
+bucket_definitions:
+
+  # -------------------------------------------------------------------------
+  # Reference data. docs/DOMAIN.md requires every dropdown to work offline —
+  # safras, materiais and status values explicitly — so parametro is here and
+  # not optional.
+  #
+  # usuario syncs so the app can show who recorded what without a round trip.
+  # -------------------------------------------------------------------------
+  org_master:
+    parameters: |
+      SELECT org_id FROM usuario
+      WHERE id = request.user_id()
+        AND deleted_at IS NULL
+        AND ativo = true
+    data:
+      - SELECT * FROM organizacao WHERE id = bucket.org_id
+      - SELECT * FROM usuario     WHERE org_id = bucket.org_id
+      - SELECT * FROM safra       WHERE org_id = bucket.org_id
+      - SELECT * FROM material    WHERE org_id = bucket.org_id
+      - SELECT * FROM fazenda     WHERE org_id = bucket.org_id
+      - SELECT * FROM gleba       WHERE org_id = bucket.org_id
+      - SELECT * FROM parametro   WHERE org_id = bucket.org_id
+
+  # -------------------------------------------------------------------------
+  # One bucket per field assigned to this técnico.
+  #
+  # Mirrors the RLS policy `plano_select`: org_id matches and an assignment
+  # exists. Every activity table filters on id_plano directly — Sync Rules
+  # cannot join, which is the whole reason that column exists on them.
+  # -------------------------------------------------------------------------
+  campos_tecnico:
+    parameters: |
+      SELECT id_plano FROM usuario_plano
+      WHERE id_usuario = request.user_id()
+        AND deleted_at IS NULL
+    data:
+      - SELECT * FROM plano_producao          WHERE id       = bucket.id_plano
+      - SELECT * FROM usuario_plano           WHERE id_plano = bucket.id_plano
+      - SELECT * FROM semeadura               WHERE id_plano = bucket.id_plano
+      - SELECT * FROM semeadura_basica        WHERE id_plano = bucket.id_plano
+      - SELECT * FROM estadio_fenologico      WHERE id_plano = bucket.id_plano
+      - SELECT * FROM bioensaio_checklist     WHERE id_plano = bucket.id_plano
+      - SELECT * FROM bioensaio               WHERE id_plano = bucket.id_plano
+      - SELECT * FROM amostra_umidade         WHERE id_plano = bucket.id_plano
+      - SELECT * FROM amostra_umidade_leitura WHERE id_plano = bucket.id_plano
+      - SELECT * FROM ficha_colheita          WHERE id_plano = bucket.id_plano
+      - SELECT * FROM carga                   WHERE id_plano = bucket.id_plano
+      - SELECT * FROM alerta_producao         WHERE id_plano = bucket.id_plano
+
+  # -------------------------------------------------------------------------
+  # Supervisor and suporte receive the entire organizacao.
+  #
+  # The role test lives in the parameter query, so a técnico simply produces no
+  # bucket here. Note this reads `papel` from the usuario table rather than from
+  # a JWT claim: the database is the single source of role truth (ADR-008), and
+  # a stale claim in a long-lived offline token must not widen what syncs.
+  #
+  # COST: a supervisor with a large organizacao downloads all of it. If that
+  # becomes painful, split this by safra so closed seasons drop off the device —
+  # which is also the unanswered retention question in docs/DOMAIN.md.
+  # -------------------------------------------------------------------------
+  org_completo:
+    parameters: |
+      SELECT org_id FROM usuario
+      WHERE id = request.user_id()
+        AND deleted_at IS NULL
+        AND ativo = true
+        AND papel IN ('supervisor', 'suporte')
+    data:
+      - SELECT * FROM plano_producao          WHERE org_id = bucket.org_id
+      - SELECT * FROM usuario_plano           WHERE org_id = bucket.org_id
+      - SELECT * FROM semeadura               WHERE org_id = bucket.org_id
+      - SELECT * FROM semeadura_basica        WHERE org_id = bucket.org_id
+      - SELECT * FROM estadio_fenologico      WHERE org_id = bucket.org_id
+      - SELECT * FROM bioensaio_checklist     WHERE org_id = bucket.org_id
+      - SELECT * FROM bioensaio               WHERE org_id = bucket.org_id
+      - SELECT * FROM amostra_umidade         WHERE org_id = bucket.org_id
+      - SELECT * FROM amostra_umidade_leitura WHERE org_id = bucket.org_id
+      - SELECT * FROM ficha_colheita          WHERE org_id = bucket.org_id
+      - SELECT * FROM carga                   WHERE org_id = bucket.org_id
+      - SELECT * FROM alerta_producao         WHERE org_id = bucket.org_id
