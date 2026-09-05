@@ -1,0 +1,290 @@
+# PowerSync Sync Streams — what reaches each device.
+#
+# Paste into the instance's Sync Streams view in the PowerSync dashboard, then
+# Validate, then Deploy. Kept in the repo so the rule is version-controlled next
+# to the RLS policies it mirrors.
+#
+# Replaces the legacy bucket_definitions format (sync_rules.yaml, removed).
+#
+# ---------------------------------------------------------------------------
+# ⚠ THIS FILE *IS* THE AUTHORIZATION FOR EVERYTHING THAT SYNCS DOWN
+#
+# PowerSync replicates through powersync_role, which holds BYPASSRLS — it must,
+# since it reads the WAL for every tenant and decides delivery itself. Row-level
+# security therefore does NOT filter replication.
+#
+# For data flowing down to a device, the queries below are the only boundary. A
+# mistake here is a cross-tenant leak and no policy will catch it. Treat this
+# file with the same care as a policy migration.
+#
+# RLS still governs the other direction: uploads travel back through PostgREST
+# as the authenticated user, and direct API reads are policy-checked as normal.
+#
+# ---------------------------------------------------------------------------
+# SOFT DELETES
+#
+# Every query filters `deleted_at IS NULL`. When a row is soft-deleted it leaves
+# the stream, and PowerSync removes it from the device — which is exactly the
+# tombstone propagation ADR-005 requires, without the device accumulating dead
+# rows forever.
+#
+# Note this differs deliberately from the RLS policies, which do NOT filter
+# deleted_at. The two govern different things: policies gate direct API reads,
+# where a caller may legitimately need to see that a row was deleted; streams
+# gate device state, where the row should simply go away.
+#
+# ---------------------------------------------------------------------------
+# THREE STREAMS
+#
+#   referencia      master data for the caller's organizacao — everyone
+#   campos_tecnico  fields assigned to this técnico, and their activity
+#   org_completo    the whole tenant — supervisor and suporte only
+#
+# A técnico matches referencia and campos_tecnico. org_completo's role test
+# yields nothing for him, so he can never fall into it.
+#
+# Every predicate is written to mirror its counterpart in
+# 20260827021042_phase2_rls_policies.sql, so the two layers can be compared by
+# eye and are less likely to drift apart.
+# ---------------------------------------------------------------------------
+
+config:
+  edition: 3
+
+streams:
+
+  # -------------------------------------------------------------------------
+  # Reference data, scoped to the caller's organizacao.
+  #
+  # docs/DOMAIN.md requires every dropdown to work with zero connectivity —
+  # safras, materiais and status values are named explicitly — so parametro is
+  # here and is not optional. Without it the técnico cannot pick a status.
+  #
+  # priority 1: this is what the UI needs before anything else can render.
+  # -------------------------------------------------------------------------
+  referencia:
+    auto_subscribe: true
+    priority: 1
+    queries:
+      - SELECT organizacao.* FROM organizacao
+        INNER JOIN usuario ON usuario.org_id = organizacao.id
+        WHERE usuario.id = auth.user_id()
+          AND usuario.ativo = true AND usuario.deleted_at IS NULL
+          AND organizacao.deleted_at IS NULL
+
+      - SELECT outros.* FROM usuario AS outros
+        INNER JOIN usuario AS eu ON eu.org_id = outros.org_id
+        WHERE eu.id = auth.user_id()
+          AND eu.ativo = true AND eu.deleted_at IS NULL
+          AND outros.deleted_at IS NULL
+
+      - SELECT safra.* FROM safra
+        INNER JOIN usuario ON usuario.org_id = safra.org_id
+        WHERE usuario.id = auth.user_id()
+          AND usuario.ativo = true AND usuario.deleted_at IS NULL
+          AND safra.deleted_at IS NULL
+
+      - SELECT material.* FROM material
+        INNER JOIN usuario ON usuario.org_id = material.org_id
+        WHERE usuario.id = auth.user_id()
+          AND usuario.ativo = true AND usuario.deleted_at IS NULL
+          AND material.deleted_at IS NULL
+
+      - SELECT fazenda.* FROM fazenda
+        INNER JOIN usuario ON usuario.org_id = fazenda.org_id
+        WHERE usuario.id = auth.user_id()
+          AND usuario.ativo = true AND usuario.deleted_at IS NULL
+          AND fazenda.deleted_at IS NULL
+
+      - SELECT gleba.* FROM gleba
+        INNER JOIN usuario ON usuario.org_id = gleba.org_id
+        WHERE usuario.id = auth.user_id()
+          AND usuario.ativo = true AND usuario.deleted_at IS NULL
+          AND gleba.deleted_at IS NULL
+
+      - SELECT parametro.* FROM parametro
+        INNER JOIN usuario ON usuario.org_id = parametro.org_id
+        WHERE usuario.id = auth.user_id()
+          AND usuario.ativo = true AND usuario.deleted_at IS NULL
+          AND parametro.deleted_at IS NULL
+
+  # -------------------------------------------------------------------------
+  # The fields assigned to this técnico, and everything recorded against them.
+  #
+  # Mirrors the RLS policy `plano_select`: an assignment exists in
+  # usuario_plano. Each activity table joins on its own id_plano, which is why
+  # that column was denormalised onto them in 20260827024517 and constrained by
+  # a composite foreign key so it cannot disagree with its parent.
+  # -------------------------------------------------------------------------
+  campos_tecnico:
+    auto_subscribe: true
+    priority: 2
+    queries:
+      - SELECT plano_producao.* FROM plano_producao
+        INNER JOIN usuario_plano ON usuario_plano.id_plano = plano_producao.id
+        WHERE usuario_plano.id_usuario = auth.user_id()
+          AND usuario_plano.deleted_at IS NULL
+          AND plano_producao.deleted_at IS NULL
+
+      - SELECT usuario_plano.* FROM usuario_plano
+        WHERE usuario_plano.id_usuario = auth.user_id()
+          AND usuario_plano.deleted_at IS NULL
+
+      - SELECT semeadura.* FROM semeadura
+        INNER JOIN usuario_plano ON usuario_plano.id_plano = semeadura.id_plano
+        WHERE usuario_plano.id_usuario = auth.user_id()
+          AND usuario_plano.deleted_at IS NULL
+          AND semeadura.deleted_at IS NULL
+
+      - SELECT semeadura_basica.* FROM semeadura_basica
+        INNER JOIN usuario_plano ON usuario_plano.id_plano = semeadura_basica.id_plano
+        WHERE usuario_plano.id_usuario = auth.user_id()
+          AND usuario_plano.deleted_at IS NULL
+          AND semeadura_basica.deleted_at IS NULL
+
+      - SELECT estadio_fenologico.* FROM estadio_fenologico
+        INNER JOIN usuario_plano ON usuario_plano.id_plano = estadio_fenologico.id_plano
+        WHERE usuario_plano.id_usuario = auth.user_id()
+          AND usuario_plano.deleted_at IS NULL
+          AND estadio_fenologico.deleted_at IS NULL
+
+      - SELECT bioensaio_checklist.* FROM bioensaio_checklist
+        INNER JOIN usuario_plano ON usuario_plano.id_plano = bioensaio_checklist.id_plano
+        WHERE usuario_plano.id_usuario = auth.user_id()
+          AND usuario_plano.deleted_at IS NULL
+          AND bioensaio_checklist.deleted_at IS NULL
+
+      - SELECT bioensaio.* FROM bioensaio
+        INNER JOIN usuario_plano ON usuario_plano.id_plano = bioensaio.id_plano
+        WHERE usuario_plano.id_usuario = auth.user_id()
+          AND usuario_plano.deleted_at IS NULL
+          AND bioensaio.deleted_at IS NULL
+
+      - SELECT amostra_umidade.* FROM amostra_umidade
+        INNER JOIN usuario_plano ON usuario_plano.id_plano = amostra_umidade.id_plano
+        WHERE usuario_plano.id_usuario = auth.user_id()
+          AND usuario_plano.deleted_at IS NULL
+          AND amostra_umidade.deleted_at IS NULL
+
+      - SELECT amostra_umidade_leitura.* FROM amostra_umidade_leitura
+        INNER JOIN usuario_plano ON usuario_plano.id_plano = amostra_umidade_leitura.id_plano
+        WHERE usuario_plano.id_usuario = auth.user_id()
+          AND usuario_plano.deleted_at IS NULL
+          AND amostra_umidade_leitura.deleted_at IS NULL
+
+      - SELECT ficha_colheita.* FROM ficha_colheita
+        INNER JOIN usuario_plano ON usuario_plano.id_plano = ficha_colheita.id_plano
+        WHERE usuario_plano.id_usuario = auth.user_id()
+          AND usuario_plano.deleted_at IS NULL
+          AND ficha_colheita.deleted_at IS NULL
+
+      - SELECT carga.* FROM carga
+        INNER JOIN usuario_plano ON usuario_plano.id_plano = carga.id_plano
+        WHERE usuario_plano.id_usuario = auth.user_id()
+          AND usuario_plano.deleted_at IS NULL
+          AND carga.deleted_at IS NULL
+
+      - SELECT alerta_producao.* FROM alerta_producao
+        INNER JOIN usuario_plano ON usuario_plano.id_plano = alerta_producao.id_plano
+        WHERE usuario_plano.id_usuario = auth.user_id()
+          AND usuario_plano.deleted_at IS NULL
+          AND alerta_producao.deleted_at IS NULL
+
+  # -------------------------------------------------------------------------
+  # Supervisor and suporte receive the entire organizacao.
+  #
+  # The role test reads `papel` from the usuario table rather than a JWT claim.
+  # The database is the single source of role truth (ADR-008), and a stale claim
+  # in a long-lived offline token must never widen what syncs.
+  #
+  # COST: a supervisor with a large organizacao downloads all of it. If that
+  # becomes painful, filter by an active safra so closed seasons drop off the
+  # device — which is also the open retention question in docs/DOMAIN.md.
+  # -------------------------------------------------------------------------
+  org_completo:
+    auto_subscribe: true
+    priority: 3
+    queries:
+      - SELECT plano_producao.* FROM plano_producao
+        INNER JOIN usuario ON usuario.org_id = plano_producao.org_id
+        WHERE usuario.id = auth.user_id()
+          AND usuario.papel IN ('supervisor', 'suporte')
+          AND usuario.ativo = true AND usuario.deleted_at IS NULL
+          AND plano_producao.deleted_at IS NULL
+
+      - SELECT usuario_plano.* FROM usuario_plano
+        INNER JOIN usuario ON usuario.org_id = usuario_plano.org_id
+        WHERE usuario.id = auth.user_id()
+          AND usuario.papel IN ('supervisor', 'suporte')
+          AND usuario.ativo = true AND usuario.deleted_at IS NULL
+          AND usuario_plano.deleted_at IS NULL
+
+      - SELECT semeadura.* FROM semeadura
+        INNER JOIN usuario ON usuario.org_id = semeadura.org_id
+        WHERE usuario.id = auth.user_id()
+          AND usuario.papel IN ('supervisor', 'suporte')
+          AND usuario.ativo = true AND usuario.deleted_at IS NULL
+          AND semeadura.deleted_at IS NULL
+
+      - SELECT semeadura_basica.* FROM semeadura_basica
+        INNER JOIN usuario ON usuario.org_id = semeadura_basica.org_id
+        WHERE usuario.id = auth.user_id()
+          AND usuario.papel IN ('supervisor', 'suporte')
+          AND usuario.ativo = true AND usuario.deleted_at IS NULL
+          AND semeadura_basica.deleted_at IS NULL
+
+      - SELECT estadio_fenologico.* FROM estadio_fenologico
+        INNER JOIN usuario ON usuario.org_id = estadio_fenologico.org_id
+        WHERE usuario.id = auth.user_id()
+          AND usuario.papel IN ('supervisor', 'suporte')
+          AND usuario.ativo = true AND usuario.deleted_at IS NULL
+          AND estadio_fenologico.deleted_at IS NULL
+
+      - SELECT bioensaio_checklist.* FROM bioensaio_checklist
+        INNER JOIN usuario ON usuario.org_id = bioensaio_checklist.org_id
+        WHERE usuario.id = auth.user_id()
+          AND usuario.papel IN ('supervisor', 'suporte')
+          AND usuario.ativo = true AND usuario.deleted_at IS NULL
+          AND bioensaio_checklist.deleted_at IS NULL
+
+      - SELECT bioensaio.* FROM bioensaio
+        INNER JOIN usuario ON usuario.org_id = bioensaio.org_id
+        WHERE usuario.id = auth.user_id()
+          AND usuario.papel IN ('supervisor', 'suporte')
+          AND usuario.ativo = true AND usuario.deleted_at IS NULL
+          AND bioensaio.deleted_at IS NULL
+
+      - SELECT amostra_umidade.* FROM amostra_umidade
+        INNER JOIN usuario ON usuario.org_id = amostra_umidade.org_id
+        WHERE usuario.id = auth.user_id()
+          AND usuario.papel IN ('supervisor', 'suporte')
+          AND usuario.ativo = true AND usuario.deleted_at IS NULL
+          AND amostra_umidade.deleted_at IS NULL
+
+      - SELECT amostra_umidade_leitura.* FROM amostra_umidade_leitura
+        INNER JOIN usuario ON usuario.org_id = amostra_umidade_leitura.org_id
+        WHERE usuario.id = auth.user_id()
+          AND usuario.papel IN ('supervisor', 'suporte')
+          AND usuario.ativo = true AND usuario.deleted_at IS NULL
+          AND amostra_umidade_leitura.deleted_at IS NULL
+
+      - SELECT ficha_colheita.* FROM ficha_colheita
+        INNER JOIN usuario ON usuario.org_id = ficha_colheita.org_id
+        WHERE usuario.id = auth.user_id()
+          AND usuario.papel IN ('supervisor', 'suporte')
+          AND usuario.ativo = true AND usuario.deleted_at IS NULL
+          AND ficha_colheita.deleted_at IS NULL
+
+      - SELECT carga.* FROM carga
+        INNER JOIN usuario ON usuario.org_id = carga.org_id
+        WHERE usuario.id = auth.user_id()
+          AND usuario.papel IN ('supervisor', 'suporte')
+          AND usuario.ativo = true AND usuario.deleted_at IS NULL
+          AND carga.deleted_at IS NULL
+
+      - SELECT alerta_producao.* FROM alerta_producao
+        INNER JOIN usuario ON usuario.org_id = alerta_producao.org_id
+        WHERE usuario.id = auth.user_id()
+          AND usuario.papel IN ('supervisor', 'suporte')
+          AND usuario.ativo = true AND usuario.deleted_at IS NULL
+          AND alerta_producao.deleted_at IS NULL
