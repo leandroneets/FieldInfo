@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'screens/role_router.dart';
+import 'sync/sync_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,6 +17,16 @@ Future<void> main() async {
     url: dotenv.env['SUPABASE_URL']!,
     anonKey: dotenv.env['SUPABASE_PUBLISHABLE_KEY']!,
   );
+
+  // Open the local database before the first frame. This does not touch the
+  // network — a cold start in airplane mode must still reach local data
+  // (ADR-004), so opening and connecting are separate steps.
+  await SyncService.instance.open();
+
+  // Connect if a session was restored from storage, and keep the connection in
+  // step with sign-in / sign-out from here on.
+  SyncService.instance.listenToAuth();
+  await SyncService.instance.connect();
 
   runApp(const FieldInfoApp());
 }
