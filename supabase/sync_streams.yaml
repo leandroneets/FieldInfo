@@ -72,11 +72,14 @@ streams:
           AND usuario.ativo = true AND usuario.deleted_at IS NULL
           AND organizacao.deleted_at IS NULL
 
-      - SELECT outros.* FROM usuario AS outros
-        INNER JOIN usuario AS eu ON eu.org_id = outros.org_id
+      # Self-join: only the JOINED copy is aliased. Aliasing the source table
+      # renames it in the synced output, so the client's `usuario` table would
+      # arrive empty while a phantom `outros` table filled up instead.
+      - SELECT usuario.* FROM usuario
+        INNER JOIN usuario AS eu ON eu.org_id = usuario.org_id
         WHERE eu.id = auth.user_id()
           AND eu.ativo = true AND eu.deleted_at IS NULL
-          AND outros.deleted_at IS NULL
+          AND usuario.deleted_at IS NULL
 
       - SELECT safra.* FROM safra
         INNER JOIN usuario ON usuario.org_id = safra.org_id
@@ -197,6 +200,17 @@ streams:
   # The database is the single source of role truth (ADR-008), and a stale claim
   # in a long-lived offline token must never widen what syncs.
   #
+  # It is written as `papel != 'tecnico'` rather than IN ('supervisor',
+  # 'suporte') because PowerSync's dialect does not support IN. The negation is
+  # only safe because usuario.papel is a CHECK constraint over exactly three
+  # values — so "not técnico" cannot mean anything but supervisor or suporte,
+  # and a fourth role cannot appear without a migration.
+  #
+  # This is precisely why ADR-014 kept papel in the schema instead of moving it
+  # into parametro with the rest of the vocabulary. Had roles been admin-editable
+  # data, a suporte user inserting a row here would silently gain whole-tenant
+  # sync through this very predicate.
+  #
   # COST: a supervisor with a large organizacao downloads all of it. If that
   # becomes painful, filter by an active safra so closed seasons drop off the
   # device — which is also the open retention question in docs/DOMAIN.md.
@@ -208,83 +222,83 @@ streams:
       - SELECT plano_producao.* FROM plano_producao
         INNER JOIN usuario ON usuario.org_id = plano_producao.org_id
         WHERE usuario.id = auth.user_id()
-          AND usuario.papel IN ('supervisor', 'suporte')
+          AND usuario.papel != 'tecnico'
           AND usuario.ativo = true AND usuario.deleted_at IS NULL
           AND plano_producao.deleted_at IS NULL
 
       - SELECT usuario_plano.* FROM usuario_plano
         INNER JOIN usuario ON usuario.org_id = usuario_plano.org_id
         WHERE usuario.id = auth.user_id()
-          AND usuario.papel IN ('supervisor', 'suporte')
+          AND usuario.papel != 'tecnico'
           AND usuario.ativo = true AND usuario.deleted_at IS NULL
           AND usuario_plano.deleted_at IS NULL
 
       - SELECT semeadura.* FROM semeadura
         INNER JOIN usuario ON usuario.org_id = semeadura.org_id
         WHERE usuario.id = auth.user_id()
-          AND usuario.papel IN ('supervisor', 'suporte')
+          AND usuario.papel != 'tecnico'
           AND usuario.ativo = true AND usuario.deleted_at IS NULL
           AND semeadura.deleted_at IS NULL
 
       - SELECT semeadura_basica.* FROM semeadura_basica
         INNER JOIN usuario ON usuario.org_id = semeadura_basica.org_id
         WHERE usuario.id = auth.user_id()
-          AND usuario.papel IN ('supervisor', 'suporte')
+          AND usuario.papel != 'tecnico'
           AND usuario.ativo = true AND usuario.deleted_at IS NULL
           AND semeadura_basica.deleted_at IS NULL
 
       - SELECT estadio_fenologico.* FROM estadio_fenologico
         INNER JOIN usuario ON usuario.org_id = estadio_fenologico.org_id
         WHERE usuario.id = auth.user_id()
-          AND usuario.papel IN ('supervisor', 'suporte')
+          AND usuario.papel != 'tecnico'
           AND usuario.ativo = true AND usuario.deleted_at IS NULL
           AND estadio_fenologico.deleted_at IS NULL
 
       - SELECT bioensaio_checklist.* FROM bioensaio_checklist
         INNER JOIN usuario ON usuario.org_id = bioensaio_checklist.org_id
         WHERE usuario.id = auth.user_id()
-          AND usuario.papel IN ('supervisor', 'suporte')
+          AND usuario.papel != 'tecnico'
           AND usuario.ativo = true AND usuario.deleted_at IS NULL
           AND bioensaio_checklist.deleted_at IS NULL
 
       - SELECT bioensaio.* FROM bioensaio
         INNER JOIN usuario ON usuario.org_id = bioensaio.org_id
         WHERE usuario.id = auth.user_id()
-          AND usuario.papel IN ('supervisor', 'suporte')
+          AND usuario.papel != 'tecnico'
           AND usuario.ativo = true AND usuario.deleted_at IS NULL
           AND bioensaio.deleted_at IS NULL
 
       - SELECT amostra_umidade.* FROM amostra_umidade
         INNER JOIN usuario ON usuario.org_id = amostra_umidade.org_id
         WHERE usuario.id = auth.user_id()
-          AND usuario.papel IN ('supervisor', 'suporte')
+          AND usuario.papel != 'tecnico'
           AND usuario.ativo = true AND usuario.deleted_at IS NULL
           AND amostra_umidade.deleted_at IS NULL
 
       - SELECT amostra_umidade_leitura.* FROM amostra_umidade_leitura
         INNER JOIN usuario ON usuario.org_id = amostra_umidade_leitura.org_id
         WHERE usuario.id = auth.user_id()
-          AND usuario.papel IN ('supervisor', 'suporte')
+          AND usuario.papel != 'tecnico'
           AND usuario.ativo = true AND usuario.deleted_at IS NULL
           AND amostra_umidade_leitura.deleted_at IS NULL
 
       - SELECT ficha_colheita.* FROM ficha_colheita
         INNER JOIN usuario ON usuario.org_id = ficha_colheita.org_id
         WHERE usuario.id = auth.user_id()
-          AND usuario.papel IN ('supervisor', 'suporte')
+          AND usuario.papel != 'tecnico'
           AND usuario.ativo = true AND usuario.deleted_at IS NULL
           AND ficha_colheita.deleted_at IS NULL
 
       - SELECT carga.* FROM carga
         INNER JOIN usuario ON usuario.org_id = carga.org_id
         WHERE usuario.id = auth.user_id()
-          AND usuario.papel IN ('supervisor', 'suporte')
+          AND usuario.papel != 'tecnico'
           AND usuario.ativo = true AND usuario.deleted_at IS NULL
           AND carga.deleted_at IS NULL
 
       - SELECT alerta_producao.* FROM alerta_producao
         INNER JOIN usuario ON usuario.org_id = alerta_producao.org_id
         WHERE usuario.id = auth.user_id()
-          AND usuario.papel IN ('supervisor', 'suporte')
+          AND usuario.papel != 'tecnico'
           AND usuario.ativo = true AND usuario.deleted_at IS NULL
           AND alerta_producao.deleted_at IS NULL
