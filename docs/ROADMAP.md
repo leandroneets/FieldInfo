@@ -2,7 +2,8 @@
 
 Progress marker — update as phases complete.
 
-**Current phase: 3**
+**Current phase: 3 — project paused on 2026-11-01.** Nothing changed after 2026-09-05. To resume,
+read [docs/RETOMADA.md](RETOMADA.md) first.
 
 ---
 
@@ -97,12 +98,22 @@ nothing. **Passing:** the script fabricates a second tenant and asserts 0 rows v
 
 **Objective:** The app reads from local SQLite, populated by PowerSync.
 
-- [ ] PowerSync instance connected to Supabase; publication configured
-- [ ] `max_wal_size` / `max_slot_wal_keep_size` configured (see CLAUDE.md traps)
-- [ ] PowerSync client schema mirroring the Postgres schema
-- [ ] Sync Rules: technician receives only his assigned fields; supervisor receives his org
-- [ ] Upload connector writing back through PostgREST
-- [ ] `SyncStatusService` exposing state to the UI
+- [x] PowerSync instance connected to Supabase; publication configured — publication over 19
+      tables (`20260827024718`), dedicated `powersync_role` with REPLICATION + BYPASSRLS and no
+      password in the migration (`20260827025711`; the password lives in the PowerSync
+      dashboard only). The dashboard validator accepted the sync config on 2026-09-05.
+- [ ] `max_wal_size` / `max_slot_wal_keep_size` configured (see CLAUDE.md traps). The CLI
+      command is recorded in the publication migration; **not confirmed as applied.**
+- [x] PowerSync client schema mirroring the Postgres schema — `lib/data/local/powersync_schema.dart`
+- [x] Sync Rules: technician receives only his assigned fields; supervisor receives his org —
+      written as Sync Streams (config edition 3), `supabase/sync_streams.yaml`
+- [x] Upload connector writing back through PostgREST — `lib/data/remote/powersync_connector.dart`.
+      A permanent 4xx stalls the queue loudly; parking rejected rows is Phase 8
+- [x] `SyncStatusService` exposing state to the UI — `lib/sync/sync_service.dart`, plus a status
+      strip on "Meus Campos". Not a Riverpod provider yet (Phase 4)
+- [x] Started Phase 4 early: "Meus Campos" reads from local SQLite through
+      `PlanoRepository.watchCamposAtribuidos()`, with a pure `Campo` entity
+- [ ] **The validation below has not been run.** Airplane mode, cold start, field list renders.
 
 **Output:** app displays real data with the network fully disabled.
 **Validation:** airplane mode, cold start — field list still renders.

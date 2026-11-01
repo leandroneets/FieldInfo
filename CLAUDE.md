@@ -5,6 +5,8 @@ Offline-first Android app for recording field activities in **hybrid corn seed p
 
 Read these before starting work:
 
+- @docs/RETOMADA.md — **the project was paused on 2026-11-01.** Where everything lives and how
+  to bring it back up. Read it first when resuming
 - @docs/DOMAIN.md — what the app is for, entities, the technician's workflow
 - @docs/DECISIONS.md — architectural decisions and why (do not silently reverse these)
 - @docs/ROADMAP.md — phases, current position, validation criteria

@@ -3,6 +3,10 @@
 Offline-first Android app for recording field activities in hybrid corn seed production.
 Field technicians work for up to 2 days without connectivity.
 
+> **Project paused on 2026-11-01.** To pick it up again, start with
+> [docs/RETOMADA.md](docs/RETOMADA.md) — where everything lives, how to bring it back up, and
+> where the work stopped.
+
 See [docs/DOMAIN.md](docs/DOMAIN.md) for what the app does, [docs/ROADMAP.md](docs/ROADMAP.md)
 for where the build currently stands, and [CLAUDE.md](CLAUDE.md) for architecture rules.
 
