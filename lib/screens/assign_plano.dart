@@ -157,7 +157,7 @@ class _AssignPlanoPageState extends State<AssignPlanoPage> {
                 children: [
                   DropdownButtonFormField<String>(
                     decoration: const InputDecoration(labelText: 'Plano (Campo / Fazenda)'),
-                    value: _selectedPlanoId,
+                    initialValue: _selectedPlanoId,
                     items: _planos
                         .map((p) {
                           final id = p['id_plano'].toString();
