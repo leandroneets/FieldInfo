@@ -137,7 +137,8 @@ O último commit antes da pausa também troca `value:` por `initialValue:` num
 
 ## 5. Relação com o Plant Management
 
-O Plant Management (`leandroneets/plant-management`, privado) é o sistema da planta: começa onde
+O Plant Management (só no zip `Projetos-arquivados-2026-11-01.zip`: nunca foi para o GitHub,
+porque tem dados reais da empresa) é o sistema da planta: começa onde
 este termina, no caminhão saindo do campo. Os dois **não compartilham banco nem tabela**; o elo
 entre campo e planta seria por chave de negócio (número do campo, ordem de compra do SAP), e a
 rastreabilidade de ponta a ponta ficaria num relatório no Databricks da empresa.
